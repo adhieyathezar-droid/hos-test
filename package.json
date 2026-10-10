@@ -1,0 +1,23 @@
+{
+  "name": "hos-upload",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/test.mjs",
+    "dev": "netlify dev",
+    "start": "node server.mjs",
+    "test:server": "node scripts/test-server.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Upload Data Penjualan HOS</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--tx:#1f2328;--mut:#6b7280;--bd:#e3e1d9;--ac:#1f3864;--ok:#1a7f4b;--wn:#b45309;--er:#b42318;--sf:#f1efe8}
+@media (prefers-color-scheme:dark){:root{--bg:#16181c;--card:#1f2228;--tx:#e8e8e6;--mut:#9aa0a6;--bd:#33373d;--ac:#8ab4f8;--ok:#4cc38a;--wn:#f0a24b;--er:#f97066;--sf:#2a2d34}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+main{max-width:1080px;margin:0 auto;padding:18px 16px 40px}h1{font-size:19px;margin:0}h2{font-size:15px;margin:0 0 6px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.b{display:inline-block;font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;margin-right:6px}
+.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}.wn{background:color-mix(in srgb,var(--wn) 18%,transparent);color:var(--wn)}.er{background:color-mix(in srgb,var(--er) 18%,transparent);color:var(--er)}
+.drop{display:block;border:1.5px dashed var(--bd);border-radius:10px;padding:26px 10px;text-align:center;cursor:pointer;color:var(--mut)}.drop:hover,.drop.on{border-color:var(--ac);color:var(--ac)}
+.hint{background:var(--sf);border-radius:8px;padding:10px;margin-bottom:12px}.small{font-size:12px;color:var(--mut)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.chip{background:var(--sf);border-radius:8px;padding:4px 12px}.chip b{display:block;font-size:17px}
+button,input,select{font:inherit;color:var(--tx)}button{border:1px solid var(--bd);background:var(--card);border-radius:8px;padding:6px 12px;cursor:pointer}
+button.pri{background:var(--ac);color:var(--bg);border-color:var(--ac);font-weight:600}button:disabled{opacity:.5}
+input,select{border:1px solid var(--bd);background:var(--card);border-radius:8px;padding:7px 10px;width:100%}label.f{display:block;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd)}th{color:var(--mut)}.wrap{overflow-x:auto}
+.days{display:flex;flex-wrap:wrap;gap:4px}.day{width:30px;text-align:center;border-radius:6px;padding:3px 0;font-size:12px}.msg{padding:8px 10px;border-radius:8px;margin-top:8px}
+#login{max-width:340px;margin:12vh auto 0}.tabs button{border-radius:8px 8px 0 0}.tabs button.on{background:var(--ac);color:var(--bg)}
+</style></head><body>
+<main id="app"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+import { detect, parseRecords, KIND_NAME } from '/parse.mjs';
+const $ = (s) => document.querySelector(s), app = $('#app');
+const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+const rp = (n) => Math.round(n || 0).toLocaleString('id-ID');
+let ME = null, ST = null, tab = 'upload';
+const LANE = { ginee: ['Pesanan Ginee', 'Tim Sales'], revota: ['Pengiriman Revota', 'Tim Operasional'], dana: ['Dana Platform', 'Finance'] };
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/api/' + path, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Gagal'), { status: r.status }); return j;
+}
+function renderLogin(err) {
+  app.replaceChildren(); const c = el('div', 'card'); c.id = 'login';
+  c.append(el('h1', 0, 'Upload Data Penjualan'), el('p', 'small', 'HOS of Shopaholic. Masuk dengan akun divisimu.'));
+  const u = el('input'), p = el('input'); u.placeholder = 'Username'; p.placeholder = 'Kata sandi'; p.type = 'password'; u.autocomplete = 'username'; p.autocomplete = 'current-password';
+  const b = el('button', 'pri', 'Masuk'), m = el('div', 'msg er', err || ''); m.hidden = !err; b.style.marginTop = '10px';
+  const go = async () => { b.disabled = true; try { ME = (await api('login', 'POST', { username: u.value, password: p.value })).user; await load(); } catch (e) { m.hidden = false; m.textContent = e.message; b.disabled = false; } };
+  p.onkeydown = (e) => e.key === 'Enter' && go(); b.onclick = go;
+  const l1 = el('label', 'f'); l1.append(u); const l2 = el('label', 'f'); l2.append(p); c.append(l1, l2, b, m); app.append(c);
+}
+async function load() { ST = await api('status'); render(); }
+function hintGinee() {
+  const t = ST.today.split('-').map(Number), d = t[2]; let y = t[0], m = t[1];
+  const f = d <= 10 ? (m === 1 ? `20-12-${y - 1}` : `20-${String(m - 1).padStart(2, '0')}-${y}`) : `01-${String(m).padStart(2, '0')}-${y}`;
+  return `Tarik export Ginee dari ${f} sampai ${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}.`;
+}
+function render() {
+  app.replaceChildren();
+  const top = el('div', 'top'), l = el('div'); l.append(el('h1', 0, 'Upload Data Penjualan'));
+  const who = el('div', 'row'); who.append(el('span', 'b ok', ME.roleName), el('span', 0, ME.name));
+  const lo = el('button', 0, 'Keluar'); lo.onclick = async () => { await api('logout', 'POST'); ME = null; renderLogin(); }; who.append(lo); top.append(l, who); app.append(top);
+  if (ME.role === 'admin') { const t = el('div', 'tabs'); for (const [k, n] of [['upload', 'Upload'], ['users', 'Pengguna']]) { const b = el('button', tab === k ? 'on' : '', n); b.onclick = () => { tab = k; render(); }; t.append(b); } app.append(t); }
+  tab === 'users' && ME.role === 'admin' ? renderUsers() : renderUpload();
+}
+function renderUpload() {
+  const hint = el('div', 'hint'), mine = ME.kinds;
+  hint.append(el('b', 0, 'Jalurmu: ' + (ME.role === 'admin' ? 'semua jalur' : mine.map((k) => KIND_NAME[k]).join(' / '))));
+  const tips = []; if (mine.includes('ginee')) tips.push(hintGinee() + ' (Tanggal 1-10 mulai dari tanggal 20 bulan lalu.)'); if (mine.includes('revota')) tips.push('Export Revota per hari, satu file untuk satu hari.'); if (mine.includes('shopee')) tips.push('Laporan penghasilan Shopee atau settlement TikTok. Jenisnya dikenali otomatis.');
+  tips.forEach((t) => hint.append(el('div', 'small', t))); app.append(hint);
+  const lb = el('label', 'drop'), inp = el('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv'; inp.hidden = true; lb.append(inp, el('span', 0, 'Pilih atau seret file ke sini. Jenis file dikenali otomatis.'));
+  const pv = el('div'); app.append(lb, pv);
+  inp.onchange = () => inp.files[0] && handle(inp.files[0], pv, inp);
+  ['dragover', 'dragenter'].forEach((e) => lb.addEventListener(e, (x) => { x.preventDefault(); lb.classList.add('on'); }));
+  ['dragleave', 'drop'].forEach((e) => lb.addEventListener(e, (x) => { x.preventDefault(); lb.classList.remove('on'); }));
+  lb.addEventListener('drop', (x) => x.dataTransfer.files[0] && handle(x.dataTransfer.files[0], pv, inp));
+  const g = el('div', 'grid'); g.style.margin = '14px 0';
+  for (const k of ['ginee', 'revota', 'dana']) { const c = el('div', 'card'); c.style.margin = 0; c.append(el('h2', 0, LANE[k][0]), el('div', 'small', LANE[k][1]));
+    const x = ST.last.find((r) => r.g === k), s = el('div'); s.style.marginTop = '8px';
+    if (!x) s.append(el('span', 'b wn', 'Belum pernah upload')); else { s.append(el('span', 'b ' + (x.today ? 'ok' : 'wn'), x.today ? 'Sudah upload hari ini' : 'Belum upload hari ini'), el('div', 'small', `${x.name || '-'} - ${new Date(x.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}`)); }
+    c.append(s, el('div', 'small', rp(ST.counts[k]) + ' baris tersimpan')); g.append(c); }
+  app.append(g);
+  const cal = el('div', 'card'); cal.append(el('h2', 0, 'Kalender upload Revota bulan ini'), el('div', 'small', 'Hijau = sudah ada. Merah = belum ada.')); const dd = el('div', 'days'); dd.style.marginTop = '8px';
+  const [y, mo, td] = ST.today.split('-').map(Number); for (let d = 1; d <= td; d++) { const k = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`, ok = ST.revota_days.includes(k); const e = el('div', 'day b ' + (ok ? 'ok' : d === td ? 'wn' : 'er'), d); e.title = k; dd.append(e); } cal.append(dd); app.append(cal);
+  const h = el('div', 'card'); h.append(el('h2', 0, 'Riwayat upload terakhir')); const w = el('div', 'wrap'), t = el('table'), th = el('tr');
+  ['Waktu', 'Jenis', 'Oleh', 'File', 'Baris', 'Baru', 'Berubah', 'Hilang'].forEach((x) => th.append(el('th', 0, x))); t.append(th);
+  ST.history.forEach((r) => { const tr = el('tr'); [new Date(r.at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }), KIND_NAME[r.kind], r.name, r.filename, rp(r.rows), rp(r.n_new), rp(r.n_changed), rp(r.n_missing)].forEach((v) => tr.append(el('td', 0, v))); t.append(tr); });
+  w.append(t); h.append(w); app.append(h);
+}
+const say = (pv, cls, t) => { pv.replaceChildren(); pv.append(el('div', 'msg ' + cls, t)); };
+async function handle(f, pv, inp) {
+  say(pv, 'wn', 'Membaca ' + f.name + ' ...'); let d;
+  try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true }); d = detect(wb.SheetNames.map((n) => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: false }))); } catch { return say(pv, 'er', 'File tidak bisa dibaca. Pastikan formatnya .xlsx atau .csv.'); }
+  if (!d) return say(pv, 'er', 'Kolom yang dikenali tidak ditemukan. Ini bukan file Ginee, Revota, Shopee, atau TikTok yang diharapkan.');
+  if (!ME.kinds.includes(d.kind)) return say(pv, 'er', `Ini file ${KIND_NAME[d.kind]}. Akun ${ME.roleName} tidak boleh mengunggahnya. Minta divisi yang bertugas.`);
+  const recs = parseRecords(d.kind, d.rows); if (!recs.length) return say(pv, 'er', 'Tidak ada baris data yang valid.');
+  say(pv, 'wn', 'Membandingkan dengan data tersimpan ...'); let r;
+  try { r = await api('upload/' + d.kind + '?commit=0', 'POST', { filename: f.name, records: recs }); } catch (e) { return say(pv, 'er', e.message); }
+  pv.replaceChildren(); pv.append(el('div', 'small', `${f.name} - ${KIND_NAME[d.kind]} - periode ${r.period}`));
+  const ch = el('div', 'chips'); [['Baris', r.rows], ['Baru', r.st.baru], ['Berubah', r.st.ubah], ['Sama', r.st.sama]].concat(d.kind === 'ginee' ? [['Hilang', r.st.hilang]] : []).forEach(([a, b]) => { const c = el('div', 'chip'); c.append(el('b', 0, rp(b)), el('span', 'small', a)); ch.append(c); }); pv.append(ch);
+  if (r.st.hilang) pv.append(el('div', 'msg wn', `${r.st.hilang} pesanan ada di data sebelumnya tapi tidak ada di file ini. Cek apakah salah tarik periode. Data lama tetap disimpan.`));
+  if (r.changes.length) { const dt = el('details'); dt.append(el('summary', 0, `Contoh perubahan status (${r.changes.length})`)); const t = el('table'); r.changes.forEach((x) => { const tr = el('tr'); x.forEach((v) => tr.append(el('td', 0, v))); t.append(tr); }); dt.append(t); pv.append(dt); }
+  const bar = el('div', 'row'); bar.style.marginTop = '10px'; const ok = el('button', 'pri', 'Simpan ke sistem'), no = el('button', 0, 'Batal'); bar.append(ok, no); pv.append(bar);
+  no.onclick = () => { pv.replaceChildren(); inp.value = ''; };
+  ok.onclick = async () => { ok.disabled = no.disabled = true; ok.textContent = 'Menyimpan ...'; try { const s = await api('upload/' + d.kind + '?commit=1', 'POST', { filename: f.name, records: recs }); await load(); const p2 = $('#app'); const m = el('div', 'msg ok', `Tersimpan: ${rp(s.st.baru)} baru, ${rp(s.st.ubah)} diperbarui.`); p2.insertBefore(m, p2.children[2]); } catch (e) { say(pv, 'er', e.message); } };
+}
+async function renderUsers() {
+  const c = el('div', 'card'); c.append(el('h2', 0, 'Tambah akun')); const f = { u: el('input'), n: el('input'), p: el('input'), r: el('select') };
+  f.u.placeholder = 'Username'; f.n.placeholder = 'Nama lengkap'; f.p.placeholder = 'Kata sandi (min. 8 karakter)'; f.p.type = 'password';
+  [['sales', 'Tim Sales'], ['ops', 'Tim Operasional'], ['finance', 'Finance'], ['admin', 'Admin']].forEach(([v, n]) => { const o = el('option', 0, n); o.value = v; f.r.append(o); });
+  const g = el('div', 'grid'); Object.values(f).forEach((x) => g.append(x)); const add = el('button', 'pri', 'Tambah'), m = el('div'); add.style.marginTop = '10px';
+  add.onclick = async () => { try { await api('users', 'POST', { username: f.u.value, name: f.n.value, password: f.p.value, role: f.r.value }); render(); } catch (e) { m.className = 'msg er'; m.textContent = e.message; } };
+  c.append(g, add, m); app.append(c);
+  const l = el('div', 'card'); l.append(el('h2', 0, 'Daftar akun')); const t = el('table'), th = el('tr'); ['Username', 'Nama', 'Peran', 'Status', ''].forEach((x) => th.append(el('th', 0, x))); t.append(th);
+  const { users } = await api('users'); const RN = { sales: 'Tim Sales', ops: 'Tim Operasional', finance: 'Finance', admin: 'Admin' };
+  users.forEach((u) => { const tr = el('tr'); [u.username, u.name, RN[u.role]].forEach((v) => tr.append(el('td', 0, v))); tr.append(el('td', 0, u.active ? 'Aktif' : 'Nonaktif'));
+    const a = el('td'), b1 = el('button', 0, u.active ? 'Nonaktifkan' : 'Aktifkan'), b2 = el('button', 0, 'Reset sandi'); b2.style.marginLeft = '6px';
+    b1.onclick = async () => { try { await api('users/' + u.id, 'PATCH', { active: !u.active }); render(); } catch (e) { alert(e.message); } };
+    b2.onclick = async () => { const p = prompt('Kata sandi baru (min. 8 karakter):'); if (p) try { await api('users/' + u.id, 'PATCH', { password: p }); alert('Sandi diganti.'); } catch (e) { alert(e.message); } };
+    a.append(b1, b2); tr.append(a); t.append(tr); });
+  const w = el('div', 'wrap'); w.append(t); l.append(w); app.append(l);
+}
+(async () => { try { ME = (await api('me')).user; await load(); } catch { renderLogin(); } })();
+</script></body></html>
